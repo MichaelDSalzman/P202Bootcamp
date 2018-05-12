@@ -1,0 +1,24 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "P202 Bootcamp Buckets",
+  "Parameters": {
+    "paramResourceBucketName": {
+      "Description": "Pick resources bucket name",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "ResourceBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Ref":"paramResourceBucketName"}
+      }
+    }
+  },
+  "Outputs": {
+    "outResourceBucket": {
+      "Description": "Name of bucket for resources",
+      "Value": { "Ref": "ResourceBucket" }
+    }
+  }
+}

@@ -1,0 +1,512 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "P202 Bootcamp Network Architecture",
+  "Parameters": {
+    "paramVpcCidr": {
+      "Type": "String",
+      "Description": "CIDR block for VPC",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "paramSubnetPvtAZ1Cidr": {
+      "Type": "String",
+      "Description": "CIDR block for Private AZ1 Subnet",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "paramSubnetPvtAZ2Cidr": {
+      "Type": "String",
+      "Description": "CIDR block for Private AZ2 Subnet",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "paramSubnetPubAZ1Cidr": {
+      "Type": "String",
+      "Description": "CIDR block for Public AZ1 Subnet",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "paramSubnetPubAZ2Cidr": {
+      "Type": "String",
+      "Description": "CIDR block for Public AZ2 Subnet",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "BastionKeyPairName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "Name of a keypair to assign to bastion instance."
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "paramVpcCidr"
+        },
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_VPC"
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_IGW"
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnetForAZ1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "paramSubnetPubAZ1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PublicSubnet_AZ1"
+          }
+        ]
+      }
+    },
+    "PublicSubnetForAZ2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "paramSubnetPubAZ2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PublicSubnet_AZ2"
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PublicRouteTable"
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicRouteTableAssociationForAZ1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnetForAZ1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicRouteTableAssociationForAZ2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnetForAZ2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "NATEIPForAZ1": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NATEIPForAZ2": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NATForAZ1": {
+      "DependsOn": "VPCGatewayAttachment",
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATEIPForAZ1",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnetForAZ1"
+        }
+      }
+    },
+    "NATForAZ2": {
+      "DependsOn": "VPCGatewayAttachment",
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATEIPForAZ2",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnetForAZ2"
+        }
+      }
+    },
+    "PrivateSubnetForAZ1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "paramSubnetPvtAZ1Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PrivateSubnet_AZ1"
+          }
+        ]
+      }
+    },
+    "PrivateSubnetForAZ2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "paramSubnetPvtAZ2Cidr"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PrivateSubnet_AZ2"
+          }
+        ]
+      }
+    },
+    "PrivateRouteTableForAZ1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PrivateRouteTable_AZ2"
+          }
+        ]
+      }
+    },
+    "PrivateRouteTableForAZ2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_PrivateRouteTable_AZ2"
+          }
+        ]
+      }
+    },
+    "PrivateNatRouteForAZ1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATForAZ1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTableForAZ1"
+        }
+      }
+    },
+    "PrivateNatRouteForAZ2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATForAZ2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTableForAZ2"
+        }
+      }
+    },
+    "PrivateRouteTableAssociationForAZ1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetForAZ1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTableForAZ1"
+        }
+      }
+    },
+    "PrivateRouteTableAssociationForAZ2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnetForAZ2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTableForAZ2"
+        }
+      }
+    },
+    "Bastion": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "ImageId": "ami-467ca739",
+        "InstanceType": "t2.micro",
+        "KeyName": {
+          "Ref": "BastionKeyPairName"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "BastionSecurityGroup"
+          }
+        ],
+        "SubnetId": {
+          "Ref": "PublicSubnetForAZ1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_Bastion"
+          }
+        ]
+      }
+    },
+    "BastionEip": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "Bastion"
+        },
+        "Domain": "vpc"
+      }
+    },
+    "BastionSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Rules for Bastion Host, Providing SSH & SSH Tunneling",
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": "123",
+            "ToPort": "123",
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "icmp",
+            "FromPort": "-1",
+            "ToPort": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "P202Bootcamp_BastionSG"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPC": {
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Description": "VPC ID"
+    },
+    "VpcCidr": {
+      "Value": {
+        "Fn::GetAtt": [
+          "VPC",
+          "CidrBlock"
+        ]
+      },
+      "Description": "CIDR block of the VPC"
+    },
+    "BastionSecurityGroup": {
+      "Value": {
+        "Ref": "BastionSecurityGroup"
+      },
+      "Description": "Security Group ID of the Bastion Host"
+    },
+    "BastionEIP": {
+      "Value": {
+        "Ref": "BastionEip"
+      },
+      "Description": "Public Elastic IP for the bastion"
+    },
+    "PublicSubnetForAZ1": {
+      "Value": {
+        "Ref": "PublicSubnetForAZ1"
+      },
+      "Description": "Resource ID of the public subnet assigned to AZ 1"
+    },
+    "PrivateSubnetForAZ1": {
+      "Value": {
+        "Ref": "PrivateSubnetForAZ1"
+      },
+      "Description": "Resource ID of the private subnet assigned to AZ 1"
+    },
+    "PublicSubnetForAZ2": {
+      "Value": {
+        "Ref": "PublicSubnetForAZ2"
+      },
+      "Description": "Resource ID of the public subnet assigned to AZ 2"
+    },
+    "PrivateSubnetForAZ2": {
+      "Value": {
+        "Ref": "PrivateSubnetForAZ2"
+      },
+      "Description": "Resource ID of the private subnet assigned to AZ 2"
+    },
+    "PublicRouteTable": {
+      "Value": {
+        "Ref": "PublicRouteTable"
+      },
+      "Description": "Resource ID of the route table associated with the public subnets"
+    },
+    "PrivateRouteTableForAZ1": {
+      "Value": {
+        "Ref": "PrivateRouteTableForAZ1"
+      },
+      "Description": "Resource ID of the route table associated with the subnet for AZ1"
+    },
+    "PrivateRouteTableForAZ2": {
+      "Value": {
+        "Ref": "PrivateRouteTableForAZ2"
+      },
+      "Description": "Resource ID of the route table associated with the subnet for AZ1"
+    }
+  }
+}
